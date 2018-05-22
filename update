@@ -2,6 +2,39 @@ RELEASE_VERSION=$1
 INSTALL_TYPE=$2
 
 echo "Installing $RELEASE_VERSION in '$INSTALL_TYPE' mode"
+UNAME=`uname`
+
+if [ "$UNAME" = "Darwin" ] ; then
+    SYSTEM=darwin
+elif [ "$UNAME" = "Linux" ] ; then
+    SYSTEM=linux
+fi
+
+if [ ! -d ~/.ultimated/packages/chromedriver236 ]; then
+    echo "Downloading Chromedriver 2.36..."
+    mkdir ~/.ultimated/packages/chromedriver236
+
+    if [ "$UNAME" = "Darwin" ] ; then
+        curl --progress-bar https://chromedriver.storage.googleapis.com/2.36/chromedriver_mac64.zip --output ~/.ultimated/packages/chromedriver236/chromedriver.zip
+    elif [ "$UNAME" = "Linux" ] ; then
+        curl --progress-bar https://chromedriver.storage.googleapis.com/2.36/chromedriver_linux64.zip --output ~/.ultimated/packages/chromedriver236/chromedriver.zip
+    fi
+    cd ~/.ultimated/packages/chromedriver236 && unzip chromedriver.zip && rm chromedriver.zip
+    echo "Chromedriver 2.36 ready!"
+fi
+
+if [ ! -d ~/.ultimated/packages/chromedriver238 ]; then
+    echo "Downloading Chromedriver 2.38..."
+    mkdir ~/.ultimated/packages/chromedriver238
+
+    if [ "$UNAME" = "Darwin" ] ; then
+        curl --progress-bar https://chromedriver.storage.googleapis.com/2.38/chromedriver_mac64.zip --output ~/.ultimated/packages/chromedriver238/chromedriver.zip
+    elif [ "$UNAME" = "Linux" ] ; then
+        curl --progress-bar https://chromedriver.storage.googleapis.com/2.38/chromedriver_linux64.zip --output ~/.ultimated/packages/chromedriver238/chromedriver.zip
+    fi
+    cd ~/.ultimated/packages/chromedriver238 && unzip chromedriver.zip && rm chromedriver.zip
+    echo "Chromedriver 2.38 ready!"
+fi
 
 if [ ! -d ~/.ultimated/packages/ultimated-core/$RELEASE_VERSION ]; then
     curl --progress-bar http://ultimatedtesting.com/install/ultimated-core-$RELEASE_VERSION.tar.gz --output ./ultimated.tar.gz
@@ -13,14 +46,6 @@ if [ ! -d ~/.ultimated/packages/ultimated-core/$RELEASE_VERSION ]; then
     chmod +x ~/.ultimated/packages/ultimated-core/$RELEASE_VERSION/update
 
     RELEASE_NODE_SUITE=`cat ~/.ultimated/packages/ultimated-core/$RELEASE_VERSION/release-node-suite`
-
-    UNAME=`uname`
-
-    if [ "$UNAME" = "Darwin" ] ; then
-        SYSTEM=darwin
-    elif [ "$UNAME" = "Linux" ] ; then
-        SYSTEM=linux
-    fi
 
     echo "RELEASE_NODE_SUITE is $RELEASE_NODE_SUITE"
 

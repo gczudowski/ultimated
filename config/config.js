@@ -1,7 +1,6 @@
 const CONFIG = {
-    APK_PATH: 'app.apk',
-    APP_PATH: 'app.ipa',
-    SCREENSHOT_TOLERANCE: 0.03, // 0 = identical, 1 = different
+    APK_FILE: 'app.apk',
+    APP_FILE: 'app.ipa',
     PAGE_OBJECTS_PATH: 'tests/pageObjects',
     FRAMEWORK_WAREHOUSE_FOLDER: '.ultimated',
     MAXIMUM_WAIT_TIMEOUT_SECONDS: 15,
@@ -12,7 +11,10 @@ const CONFIG = {
         '--bail': 'BAIL',
         '--afterAll': 'AFTER_ALL',
         '--beforeAll': 'BEFORE_ALL',
-        '--singleDevice': 'SINGLE_DEVICE'
+        '--singleDevice': 'SINGLE_DEVICE',
+        '--saveVisualTestReference': 'saveVisualTestReference',
+        '--spread': 'spread',
+        '--turboReset': 'turboReset'
     }
 };
 

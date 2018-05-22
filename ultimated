@@ -35,7 +35,7 @@ else
 fi
 
 if [ $HEADLESS = false ]; then
-    echo "Ultimated running in normal mode"
+    echo "Ultimated running in normal mode (project version $PROJECT_VERSION)"
     ~/.ultimated/packages/node-suites/$RELEASE_NODE_SUITE/bin/node ~/.ultimated/packages/ultimated-core/latest/main.js "$ARGUMENTS"
 else
     echo "Ultimated running in jenkins/headless mode"

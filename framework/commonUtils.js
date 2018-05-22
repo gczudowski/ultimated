@@ -1,4 +1,5 @@
 import shelljs from 'shelljs';
+import fs from 'fs';
 
 const CommonUtils = class {
     getMainPath () {
@@ -80,6 +81,32 @@ const CommonUtils = class {
 
     _getStringSlashesCount (string) {
         return string.split('\/').length - 1 ;
+    }
+
+    getAllFilesFromDirectory(dir, fileList = []) {
+        const isDir = fs.lstatSync(dir);
+        if (isDir && isDir.isDirectory()) {
+            const files = fs.readdirSync(dir);
+
+            files.forEach(function(fileName) {
+                if (fileName !== '.DS_Store') {
+                    let path = `${dir}/${fileName}`;
+
+                    if (fs.statSync(dir + '/' + fileName).isDirectory()) {
+                        fileList = this.getAllFilesFromDirectory(path, fileList);
+                    }
+                    else {
+                        fileName = fileName.replace('.js', '');
+                        path = path.replace('.js', '');
+                        fileList.push({fileName, path});
+                    }
+                }
+
+
+            }.bind(this));
+        }
+
+        return fileList;
     }
 };
 

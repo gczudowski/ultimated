@@ -1,38 +1,43 @@
-var shelljs = require('shelljs');
-var fs = require('fs');
-
-//ensures node_modules link after cloning git repo
-if (fs.existsSync('./.ultimated/release-version')) {
-    var homeDir = shelljs.exec('cd && pwd', {silent:true}).stdout.trim();
-    var projectVersion = fs.readFileSync('./.ultimated/release-version', 'utf8').trim();
-    var nodeSuiteVersion = fs.readFileSync(`${homeDir}/.ultimated/packages/ultimated-core/${projectVersion}/release-node-suite`, 'utf8').trim();
-    shelljs.exec(`ln -s ~/.ultimated/packages/node-suites/${nodeSuiteVersion}/lib/node_modules "./.ultimated/node_modules"`, {silent: true});
-}
-
 require('babel-register')({
     "presets": ["es2015", "es2016", "stage-2"]
 });
 
 require('babel-polyfill');
 
+var shelljs = require('shelljs');
+var fs = require('fs');
+var config = require('./config/config').default;
+
+//ensures node_modules link after cloning git repo
+if (fs.existsSync('./.ultimated/release-version')) {
+    var homeDir = shelljs.exec('cd && pwd', {silent:true}).stdout.trim();
+    var projectVersion = fs.readFileSync('./.ultimated/release-version', 'utf8').trim();
+    shelljs.exec(`${config.ULTIMATED_CORE_ABSOLUTE_PATH}/latest/update ${projectVersion} download`);
+    var nodeSuiteVersion = fs.readFileSync(`${homeDir}/.ultimated/packages/ultimated-core/${projectVersion}/release-node-suite`, 'utf8').trim();
+
+    shelljs.exec(`ln -s ~/.ultimated/packages/node-suites/${nodeSuiteVersion}/lib/node_modules "./.ultimated/node_modules"`, {silent: true});
+}
+
 var versionManager = require('./framework/versionManager').default;
 var commonUtils = require('./framework/commonUtils').default;
-var config = require('./config/config').default;
+var executionParamsParser = require('./framework/outsideTest/executionParamsParser').default;
+
 // set project relative path
 global.Ultimated = {
     VAULT: {
         PROJECT_RELATIVE_PATH_SHALLOW: commonUtils.getProjectPathRelativeToFrameworkPath(),
         PROJECT_RELATIVE_PATH: commonUtils.getProjectPathRelativeToFrameworkPath(1),
         FRAMEWORK_RELATIVE_PATH_SHALLOW: commonUtils.getFrameworkPathRelativeToProjectPath(),
-        FRAMEWORK_RELATIVE_PATH: commonUtils.getFrameworkPathRelativeToProjectPath(1)
+        FRAMEWORK_RELATIVE_PATH: commonUtils.getFrameworkPathRelativeToProjectPath(1),
     },
-    FLAGS: {}
+    FLAGS: {},
+    PARAMS: {}
 };
 
 process.argv.forEach((argv, index) => {
-    if (argv.includes(' ') && argv.includes('--')) {
+    if (argv.includes('--')) {
         argv.split(' ').forEach((param) => {
-            if (config.SUPPORTED_FLAGS[param]) {
+            if (param.includes('--') && config.SUPPORTED_FLAGS[param]) {
                 Ultimated.FLAGS[config.SUPPORTED_FLAGS[param]] = true;
             }
         })
@@ -42,11 +47,17 @@ process.argv.forEach((argv, index) => {
         Ultimated.BRANCH = argv.match(/-branch\s\w+([^\s]+)/g)[0].replace('-branch ', '');
     }
 });
+Ultimated.PARAMS = executionParamsParser.parseParamsToObject();
 
 function executeTests(afterAllCallback) {
     shelljs.exec(`rm -rf ./.ultimated/tests`);
+    shelljs.exec(`rm -rf ./.ultimated/node_modules`, {silent: true});
+    shelljs.exec(`rm -rf ./.ultimated/framework.js`, {silent: true});
+    shelljs.exec(`rm -rf ./.ultimated/config.js`, {silent: true});
+    shelljs.exec(`rm -rf ./screenshot-reference/compare`, {silent: true});
     shelljs.exec(`cp -r tests ./.ultimated`);
     shelljs.exec(`cp config.js ./.ultimated`);
+    shelljs.exec(`ln -s ~/.ultimated/packages/node-suites/${nodeSuiteVersion}/lib/node_modules "./.ultimated/node_modules"`, {silent: true});
 
     // DEPRECATED >>
     global.PROJECT_CONFIG = require(global.PROJECT_RELATIVE_PATH_SHALLOW + '.ultimated/config.js').default;
@@ -62,7 +73,6 @@ function executeTests(afterAllCallback) {
     Ultimated.VAULT.FRAMEWORK_CURRENT_VERSION = versionManager.getFrameworkCurrentVersion();
     Ultimated.VAULT.FRAMEWORK_LATEST_VERSION = versionManager.getFrameworkLatestVersion();
     versionManager.ensureLatestFrameworkVersion();
-    versionManager.ensureProperFrameworkVersion();
 
     versionManager.informAboutNewerVersion();
 

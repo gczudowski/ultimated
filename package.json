@@ -1,6 +1,6 @@
 {
   "name": "Ultimated",
-  "version": "0.2.0",
+  "version": "0.9.3",
   "description": "Start testing hybrid mobile apps on real devices within minutes!",
   "main": "main.js",
   "repository": {
@@ -25,7 +25,7 @@
   },
   "homepage": "https://github.com/ultimatedtesting/ultimated",
   "dependencies": {
-    "appium": "1.6.3",
+    "appium": "1.7.2",
     "babel-cli": "6.22.2",
     "babel-core": "6.22.1",
     "babel-polyfill": "6.22.0",
@@ -40,6 +40,7 @@
     "good-mocha-html-reporter": "2.0.1",
     "mocha": "3.5.0",
     "moment": "2.17.1",
+    "png-crop": "0.0.1",
     "query-string": "4.3.2",
     "request": "2.79.0",
     "shelljs": "0.7.6",

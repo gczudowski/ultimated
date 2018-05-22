@@ -52,7 +52,7 @@ const VersionManager = class {
     informAboutNewerVersion() {
         if (vc.lt(Ultimated.VAULT.PROJECT_VERSION, Ultimated.VAULT.FRAMEWORK_LATEST_VERSION)) {
             console.log('');
-            console.log('A newer version of Ultimaed is available');
+            console.log('A newer version of Ultimated is available');
             console.log('In order to update your project, type');
             console.log('  ultimated update');
             console.log('');

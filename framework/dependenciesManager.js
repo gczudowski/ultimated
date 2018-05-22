@@ -1,6 +1,7 @@
 import fs from 'fs';
 import shelljs from 'shelljs';
 import CONFIG from './../config/config';
+import CommonUtils from './commonUtils';
 
 const DependenciesManager = class {
     constructor() {
@@ -14,7 +15,7 @@ const DependenciesManager = class {
 
         let fileContent = '';
 
-        const files = this.getAllFilesFromDirectory(path);
+        const files = CommonUtils.getAllFilesFromDirectory(path);
 
         fileContent += `export as namespace Framework {\n`;
         files.forEach((pageObjectClass, pageObjectIndex) => {
@@ -43,7 +44,7 @@ const DependenciesManager = class {
 
         let fileContent = '';
 
-        const files = this.getAllFilesFromDirectory(path);
+        const files = CommonUtils.getAllFilesFromDirectory(path);
         files.forEach((pageObjectData) => {
             fileContent += `import ${pageObjectData.fileName} from '.${pageObjectData.path.replace(CONFIG.FRAMEWORK_WAREHOUSE_FOLDER, '')}';\n`;
         });
@@ -53,10 +54,17 @@ const DependenciesManager = class {
             fileContent += `    ${pageObjectClass.fileName}: {\n`;
 
             let methods;
-            methods = this.getAllMethods(require(`${PROJECT_RELATIVE_PATH}${pageObjectClass.path}`).default);
+            // methods = this.getAllMethods(require(`${PROJECT_RELATIVE_PATH}${pageObjectClass.path}`).default);
+
+            const pageObjectInstance = require(`${PROJECT_RELATIVE_PATH}${pageObjectClass.path}`).default;
+            methods = this.getAllMethodsExtended(pageObjectInstance);
 
             methods.forEach((methodName, methodIndex) => {
-                fileContent += `        ${methodName}: ${pageObjectClass.fileName}.${methodName}`;
+                if (this.isMethodAsync(pageObjectInstance[methodName])) {
+                    fileContent += `        ${methodName}: (arg1, arg2, arg3) => { return new Promise((resolve, reject) => { const functionReturnValue = ${pageObjectClass.fileName}.${methodName}.call(${pageObjectClass.fileName}, arg1, arg2, arg3); if (functionReturnValue.then) { functionReturnValue.then((arg1) => { resolve(arg1); }).catch((err) => { if (!global.finalError) { global.finalError = 'Error in ${pageObjectClass.fileName}.${methodName}! ' + err; } ;console.log(''); console.log('Error in ${pageObjectClass.fileName}.${methodName}! ' + err); reject(err); }); } else { resolve(functionReturnValue); } }); }`;
+                } else {
+                    fileContent += `        ${methodName}: (arg1, arg2, arg3) => { let value; try { value = ${pageObjectClass.fileName}.${methodName}.call(${pageObjectClass.fileName}, arg1, arg2, arg3); } catch(err) { if (!global.finalError) { global.finalError = 'Error in ${pageObjectClass.fileName}.${methodName}! ' + err; } console.log(''); console.log('Error in ${pageObjectClass.fileName}.${methodName}! ' + err); } return value; }`;
+                }
 
                 if (methodIndex === methods.length - 1) {
                     fileContent += '\n';
@@ -96,32 +104,52 @@ const DependenciesManager = class {
         return methods;
     }
 
-    getAllFilesFromDirectory(dir, fileList = []) {
-        const fs = fs || require('fs');
-        const files = fs.readdirSync(dir);
+    getAllMethodsExtended(obj) {
+        const FORBIDDEN_KEYS = {
+            constructor: true,
+            hasOwnProperty: true,
+            toString: true,
+            toLocaleString: true,
+            valueOf: true,
+            isPrototypeOf: true,
+            propertyIsEnumerable: true,
+            __proto__: true,
+            __defineGetter__: true,
+            __defineSetter__: true,
+            __lookupGetter__: true,
+            __lookupSetter__: true
+        };
 
-        files.forEach(function(fileName) {
-            if (fileName !== '.DS_Store') {
-                let path = `${dir}/${fileName}`;
+        let methods = [];
+        while (obj = Reflect.getPrototypeOf(obj)) {
+            let keys = Reflect.ownKeys(obj);
 
-                if (fs.statSync(dir + '/' + fileName).isDirectory()) {
-                    fileList = this.getAllFilesFromDirectory(path, fileList);
+            keys.forEach((key) => {
+                if (!FORBIDDEN_KEYS[key]) {
+                    methods.push(key)
                 }
-                else {
-                    fileName = fileName.replace('.js', '');
-                    path = path.replace('.js', '');
-                    fileList.push({fileName, path});
-                }
-            }
+            });
+        }
 
+        return methods;
+    }
 
-        }.bind(this));
+    isMethodAsync(method) {
+        const methodBody = String(method);
 
-        return fileList;
+        return methodBody.indexOf('.apply(this, arguments);') > 0 && methodBody.indexOf('return _ref') > 0;
     }
 
     createXCodeConfig() {
-        const fileContent = `DEVELOPMENT_TEAM = ${PROJECT_CONFIG.DEVELOPMENT_TEAM_ID}\nCODE_SIGN_IDENTITY = iPhone Developer`;
+        let appleDevelopmentTeamId ;
+
+        if (PROJECT_CONFIG && PROJECT_CONFIG.certificates && PROJECT_CONFIG.certificates.appleDevelopmentTeamId) {
+            appleDevelopmentTeamId = PROJECT_CONFIG.certificates.appleDevelopmentTeamId
+        } else {
+            appleDevelopmentTeamId = 'YOUR_DEV_TEAM_ID';
+        }
+
+        const fileContent = `DEVELOPMENT_TEAM = ${appleDevelopmentTeamId}\nCODE_SIGN_IDENTITY = iPhone Developer`;
 
         fs.writeFile(`${global.FRAMEWORK_RELATIVE_PATH}/xcode.conf`, fileContent, function(err) {
             if(err) {
@@ -129,6 +157,8 @@ const DependenciesManager = class {
             }
         });
     }
+
+
 };
 
 export default new DependenciesManager();
