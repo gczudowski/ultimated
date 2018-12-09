@@ -27,8 +27,6 @@ if (PROJECT_CONFIG.defaultParams && PROJECT_CONFIG.defaultParams instanceof Obje
     Ultimated.VAULT.PARAMS = PROJECT_CONFIG.defaultParams;
 }
 
-global.SuiteManager = require('./suiteManager').default;
-
 const envKeys = Object.keys(process.env);
 
 if (envKeys.length) {
@@ -44,6 +42,7 @@ if (envKeys.length) {
 
 Ultimated.VAULT.FLAGS = TestParamsParser.getUltimatedFlags();
 
+global.SuiteManager = require('./suiteManager').default;
 
 var chai = require('chai');
 global.assert = chai.assert;

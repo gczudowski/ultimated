@@ -13,6 +13,7 @@ import fs from 'fs';
 import commonUtils from '../commonUtils';
 import PNGCrop from 'png-crop';
 import ReportCreator from './reportCreator';
+
 const SuiteManagerClass = class {
     constructor () {
         global.Framework = {
@@ -20,7 +21,7 @@ const SuiteManagerClass = class {
             ANDROID: 'Android',
             PLATFORM: process.env.PLATFORM,
             SPECIAL_KEYS: webDriverInstance.SPECIAL_KEYS,
-            PORT: process.env.PORT,
+            PORT: parseInt(process.env.PORT),
             BEGIN_DATE_TIME: process.env.DATETIME,
             DEVICE_ID: process.env.DEVICE,
             LOGFILE: `${process.env.DATETIME}-${process.env.PORT}`,
@@ -89,6 +90,11 @@ const SuiteManagerClass = class {
             this.ensureProperChromedriverVersion();
         }
 
+        if (Ultimated.VAULT.FLAGS.noReinstall === true) {
+            this.capsConfig.noReset = true;
+            this.capsConfig.fullReset = false;
+        }
+
         if (PROJECT_CONFIG.desiredCapabilities) {
             this.capsConfig = {
                 ...this.capsConfig,
@@ -103,7 +109,7 @@ const SuiteManagerClass = class {
         let chromeDriver;
 
         if (Framework.ANDROID_SDK > 19) {
-            if (chromeDump.includes('versionName=64')) {
+            if (chromeDump.includes('versionName=64') || chromeDump.includes('versionName=63')) {
                 console.log('Detected Chrome version unsupported by Appium. Ultimated will use Chromedriver 2.36 to solve the issue...');
                 chromeDriver = `${mainPath}/packages/chromedriver236/chromedriver`;
             } else if (chromeDump.includes('versionName=65') || chromeDump.includes('versionName=66') || chromeDump.includes('versionName=67')) {
@@ -117,7 +123,7 @@ const SuiteManagerClass = class {
             }
         }
 
-        if (chromeDriver) {
+        if (chromeDriver && !this.capsConfig.chromedriverExecutable) {
             this.capsConfig.chromedriverExecutable = chromeDriver
         }
     }
@@ -125,36 +131,35 @@ const SuiteManagerClass = class {
     async initBefore (filename) {
         this.moduleName = filename.split('/').pop().split('.').shift();
 
-        return new Promise(async (resolve, reject) => {
-            this.suiteStartMoment = moment();
-            if (Framework.PLATFORM === Framework.IOS) {
-                // TODO kill ios_webkit_debug_proxy only for current user
-                // console.log('Killing all ios debug proxy instances...');
-                // shelljs.exec(`killall ios_webkit_debug_proxy`, {silent: true});
-                // shelljs.exec(`ios_webkit_debug_proxy -c ${Framework.DEVICE_ID}:${Framework.PORT+300} -d`, {silent: true, async: true});
+        this.suiteStartMoment = moment();
+        if (Framework.PLATFORM === Framework.IOS) {
+            // TODO kill ios_webkit_debug_proxy only for current user
+            // console.log('Killing all ios debug proxy instances...');
+            // shelljs.exec(`killall ios_webkit_debug_proxy`, {silent: true});
+            // shelljs.exec(`ios_webkit_debug_proxy -c ${Framework.DEVICE_ID}:${Framework.PORT+300} -d`, {silent: true, async: true});
+        }
+
+
+        const isTurboReset = Ultimated.VAULT.FLAGS.turboReset;
+        if ((isTurboReset && !global.driver) || !isTurboReset) {
+            const startMoment = moment();
+            await this.initializeSuite();
+            await this.initializeDriver();
+
+            await this.turboReset();
+
+            this.exposeFramework();
+            this.exposeUltimatedMethods();
+            this.initTime = Math.ceil(moment().diff(startMoment) / 1000);
+
+            console.log(`Tests ready. Loading took ${this.initTime} seconds`);
+            if (isTurboReset) {
+                const approxSaveTime = Math.ceil(Object.keys(this.reportData.map).length * this.initTime / 60);
+                console.log(`Turbo reset enabled! It will save approx ${approxSaveTime} minutes...`);
             }
-
-
-            const isTurboReset = Ultimated.VAULT.FLAGS.turboReset;
-            if ((isTurboReset && !global.driver) || !isTurboReset) {
-                const startMoment = moment();
-                await this.initializeSuite();
-
-                await this.initializeDriver();
-
-                this.exposeFramework();
-                this.exposeUltimatedMethods();
-                this.initTime = Math.ceil(moment().diff(startMoment) / 1000);
-
-                console.log(`Tests ready. Loading took ${this.initTime} seconds`);
-                if (isTurboReset) {
-                    const approxSaveTime = Math.ceil(Object.keys(this.reportData.map).length * this.initTime / 60);
-                    console.log(`Turbo reset enabled! It will save approx ${approxSaveTime} minutes...`);
-                }
-            }
-
-            resolve();
-        });
+        } else if (isTurboReset && global.driver) {
+            await this.turboReset();
+        }
     }
 
     async initializeSuite() {
@@ -167,7 +172,7 @@ const SuiteManagerClass = class {
         this.enhanceDriver(webDriverInstance);
         this.enhanceFramework(Framework);
 
-        if (Framework.PLATFORM === Framework.ANDROID) {
+        if (Framework.PLATFORM === Framework.ANDROID && Ultimated.VAULT.FLAGS.noReinstall !== true) {
             console.log('Cleaning android device...');
 
             const packagesList = shelljs.exec(`adb -s ${Framework.DEVICE_ID} shell pm list packages`, {silent: true}).stdout;
@@ -189,6 +194,7 @@ const SuiteManagerClass = class {
     async initializeDriver() {
         console.log('Installing app on the device...');
         const driver = webDriverInstance.promiseChainRemote(this.serverConfig);
+        this.exposeDriver(driver);
 
         try {
             await driver.init(this.capsConfig);
@@ -223,18 +229,13 @@ const SuiteManagerClass = class {
 
         console.log('WebView context ready! Setting up framework...');
 
-        Framework.CONTEXTS = {
-            WEBVIEW: Framework.CONTEXT,
-            NATIVE: contexts[0]
-        };
+
 
         Framework.SCREEN_HEIGHT = (await driver.execute('return window.screen')).height;
         Framework.SCREEN_WIDTH = (await driver.execute('return window.screen')).width;
         Framework.SCREEN_RATIO = (await driver.execute('return window.devicePixelRatio'));
         Framework.SCREEN_RESOLUTION_HEIGHT = Framework.SCREEN_HEIGHT * Framework.SCREEN_RATIO;
         Framework.SCREEN_RESOLUTION_WIDTH = Framework.SCREEN_WIDTH * Framework.SCREEN_RATIO;
-
-        this.exposeDriver(driver);
     }
 
     exposeChai(webDriverInstance) {
@@ -489,7 +490,11 @@ const SuiteManagerClass = class {
                         this.elementByXPathOrNull(selector).then((arg1) => {
                             resolve(!!arg1);
                         }).catch((err) => {
-                            reject(`Error in isElement(${selector})! (Original Appium Error -> ${err})`);
+                            if (err.message && err.message.includes('A modal dialog was open, blocking this operation')) {
+                                resolve(false);
+                            } else {
+                                reject(`Error in isElement(${selector})! (Original Appium Error -> ${err})`);
+                            }
                         });
                     });
                 } else {
@@ -497,7 +502,11 @@ const SuiteManagerClass = class {
                         this.elementByCssSelectorOrNull(selector).then((arg1) => {
                             resolve(!!arg1);
                         }).catch((err) => {
-                            reject(`Error in isElement(${selector})! (Original Appium Error -> ${err})`);
+                            if (err.message && err.message.includes('A modal dialog was open, blocking this operation')) {
+                                resolve(false);
+                            } else {
+                                reject(`Error in isElement(${selector})! (Original Appium Error -> ${err})`);
+                            }
                         });
                     });
                 }
@@ -601,21 +610,12 @@ const SuiteManagerClass = class {
                 const width =  Framework.SCREEN_WIDTH * Framework.SCREEN_RATIO;
 
                 return new Promise(async (resolve, reject) => {
-                    console.log('######### #debug scrollDownUntilElement start');
-                    console.log('######### #debug isDisplayed?', await this.selectElement(selector).isDisplayed());
-                    console.log('######### #debug isVisible?', await this.selectElement(selector).isVisible());
-                    console.log('######### #debug getLocation?', await this.selectElement(selector).getLocation());
-                    console.log('######### #debug getLocationInView?', await this.selectElement(selector).getLocationInView());
-                    console.log('######### #debug getSize?', await this.selectElement(selector).getSize());
                     while(!await this.selectElement(selector).isDisplayed()) {
-                        console.log('######### #debug isDisplayed?', await this.selectElement(selector).isDisplayed());
-                        
                         await this.swipe({
                             endX: parseInt(width * 0.5), endY: parseInt(height * 0.25),
                             startX: parseInt(width * 0.5),  startY: parseInt(height * 0.75),
                             duration: 800
                         });
-                        console.log('######### #debug swiping...');
                         await sleep(1000);
                     }
 
@@ -645,6 +645,8 @@ const SuiteManagerClass = class {
                                     setTimeout(check.bind(null, selector), timerTimeout);
                                 }
                             }
+                        }).catch((error) => {
+                            resolve();
                         });
                     }
 
@@ -674,6 +676,8 @@ const SuiteManagerClass = class {
                                     setTimeout(check.bind(null, selector), timerTimeout);
                                 }
                             }
+                        }).catch((error) => {
+                            resolve();
                         });
                     }
 
@@ -748,8 +752,7 @@ const SuiteManagerClass = class {
                                     await this.tapXY(0.5, 0.862);
                                 }
 
-                                // await this.selectElement(`//XCUIElementTypeButton[@name="Done"]`).click();
-                                await this.hideKeyboard();
+                                await this.selectElement(`//XCUIElementTypeButton[@name="Done"]`).click();
 
                                 await this.goToWebviewContext();
 
@@ -848,6 +851,24 @@ const SuiteManagerClass = class {
         //
         //     }
         // );
+
+        webDriverInstance.addPromiseChainMethod(
+            'customClickElement',
+            function(selector) {
+                return new Promise((resolve, reject) => {
+                    global.driver.clickElement(selector).then((data) => {
+                        resolve();
+                    }).catch((err) => {
+                        if (err.message && err.message.includes('dialog has invalid')) {
+                            resolve();
+                        } else {
+                            reject(`Error in clickElement(${selector})! (Original Appium Error -> ${err})`);
+                        }
+                    });
+                });
+
+            }
+        );
     }
 
     isSelectorXpath(selector) {
@@ -883,16 +904,14 @@ const SuiteManagerClass = class {
                 return true;
             }
 
-            if (Framework.PLATFORM === Framework.IOS) {
-                console.log('Visual testing unavailable on iOS. Try again later!');
-                return true;
-            }
+            // if (Framework.PLATFORM === Framework.IOS) {
+            //     console.log('Visual testing unavailable on iOS. Try again later!');
+            //     return true;
+            // }
 
             const comparer = screenshotComparer({
                 Q: driver.Q,
-                tolerance: tolerance,
-                highlightColor: 'magenta',
-                highlightStyle: 'Tint'
+                tolerance: tolerance
             });
 
             let referenceImagePath;
@@ -995,6 +1014,11 @@ const SuiteManagerClass = class {
     async initializeDriverContext(driver, contexts) {
         try {
             await driver.context(Framework.CONTEXT);
+
+            Framework.CONTEXTS = {
+                WEBVIEW: Framework.CONTEXT,
+                NATIVE: contexts[0]
+            };
         } catch (e) {
             console.log(e);
             console.log('Context change error, retrying (1/2)...', Framework.CONTEXT);
@@ -1043,6 +1067,7 @@ const SuiteManagerClass = class {
         global.swipeDown = driver.swipeDown.bind(driver);
         global.tapXY = driver.tapXY.bind(driver);
         global.scrollDownUntilElement = driver.scrollDownUntilElement.bind(driver);
+        global.clickElement = driver.customClickElement.bind(driver);
         // global.tapLocation = driver.tapLocation.bind(driver);
         // global.tapElement = driver.tapp.bind(driver);
 
@@ -1078,26 +1103,22 @@ const SuiteManagerClass = class {
     }
 
     async initAfter () {
-        return new Promise(async (resolve) => {
-            this.recordSuiteExecutionTime();
+        this.recordSuiteExecutionTime();
 
-            ReportCreator.createReport({
-                ...this.reportData,
-                beginDateTime: this.beginDateTime
-            });
-            fs.writeFileSync(`./reports/${this.beginDateTime}/combinedReportData/${this.deviceId}`, JSON.stringify(this.reportData));
-
-            if (Ultimated.VAULT.FLAGS.turboReset && !this.isLastDescribe()) {
-                const startTime = moment();
-                await this.turboReset();
-                const endTime = Math.ceil(moment().diff(startTime) / 1000);
-                console.log(`Turbo reset finished. Saved ${this.initTime - endTime} seconds. Executing next suite...`);
-            } else {
-                await this.quitDriver();
-            }
-
-            resolve();
+        ReportCreator.createReport({
+            ...this.reportData,
+            beginDateTime: this.beginDateTime
         });
+        fs.writeFileSync(`./reports/${this.beginDateTime}/combinedReportData/${this.deviceId}`, JSON.stringify(this.reportData));
+
+        if (Ultimated.VAULT.FLAGS.turboReset && !this.isLastDescribe()) {
+            const startTime = moment();
+            await this.turboReset();
+            const endTime = Math.ceil(moment().diff(startTime) / 1000);
+            console.log(`Turbo reset finished. Saved ${this.initTime - endTime} seconds. Executing next suite...`);
+        } else {
+            await this.quitDriver();
+        }
     }
 
     recordSuiteExecutionTime() {
@@ -1142,6 +1163,12 @@ const SuiteManagerClass = class {
                     SuiteManager.killExistingMovieRecordingProcesses();
                     // shelljs.exec(`adb -s ${this.deviceId} shell input keyevent KEYCODE_WAKEUP`, {silent: true});
                     shelljs.exec(`adb -s ${Framework.DEVICE_ID} shell input keyevent 224`, { silent: true });
+
+                    const isScreenOff = shelljs.exec(`adb -s ${Framework.DEVICE_ID} shell dumpsys input_method | grep mScreenOn=false`, { silent: true }).stdout.includes('mScreenOn=false');
+                    if (isScreenOff) {
+                        console.log('######### #debug DETECTED SCREEN IS STILL OFF!!!');
+                        shelljs.exec(`adb -s ${Framework.DEVICE_ID} shell input keyevent 26`, { silent: true });
+                    }
 
                     // screen recording
                     // #video_recording

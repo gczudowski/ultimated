@@ -57,6 +57,7 @@ const ReportCreator = class {
             if (testData.state === 'failed') {
                 if (typeof testData.finalError !== 'string') {
                     console.log('######### #debug ERROR NOT STRING', testData.finalError);
+
                 }
                 const screenshotName = encodeURIComponent(`${testData.moduleName}-FAILED-${testData.title}`).replace("'", '%27');
                 const imgPath = `${testData.deviceId}/${screenshotName}.png`;

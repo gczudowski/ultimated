@@ -46,6 +46,10 @@ process.argv.forEach((argv, index) => {
     if (argv.includes('-branch')) {
         Ultimated.BRANCH = argv.match(/-branch\s\w+([^\s]+)/g)[0].replace('-branch ', '');
     }
+
+    if (argv.includes('-testsBranch')) {
+        Ultimated.TESTS_BRANCH = argv.match(/-testsBranch\s\w+([^\s]+)/g)[0].replace('-testsBranch ', '');
+    }
 });
 Ultimated.PARAMS = executionParamsParser.parseParamsToObject();
 
@@ -105,8 +109,13 @@ if (process.argv[2] === 'create' && process.argv[3]) { // if ultimated is run wi
     console.log('');
 } else if (fs.existsSync('./.ultimated/release-version')) {
     if (Ultimated.FLAGS.BEFORE_ALL && fs.existsSync('./beforeAll.sh')) {
-        console.log('Executing beforeAll.sh script...');
-        shelljs.exec(`./beforeAll.sh ${Ultimated.BRANCH}`);
+        console.log(`Running command -> ./beforeAll.sh ${Ultimated.BRANCH} ${Ultimated.TESTS_BRANCH}`);
+        const response = shelljs.exec(`./beforeAll.sh ${Ultimated.BRANCH} ${Ultimated.TESTS_BRANCH}`);
+
+        if (response.stderr) {
+            console.log('Error in BeforeAll script! I would exit but exit is disabled for now!', response.stderr);
+            // process.exit(1);
+        }
     } else if (Ultimated.FLAGS.BEFORE_ALL) {
         console.log('You used --beforeAll flag, but the beforeAll.sh file is missing');
     }
